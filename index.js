@@ -1,51 +1,51 @@
+const express = require('express');
 const axios = require('axios');
+const app = express();
+
+app.use(express.json());
 
 const apiKey = process.env.CHATWORK_API_KEY;
-const roomId = process.env.CHATWORK_ROOM_ID;
+const roomId = process.env.CHATWORK_ROOM_ID; // 返信用のルームID
 
-async function sendMessage(message) {
-    const url = `https://api.chatwork.com/v2/rooms/${roomId}/messages`;
-    try {
+app.get('/', (req, res) => {
+  res.send('Bot is running!');
+});
+
+// Webhook受け取り用エンドポイント
+app.post('/webhook', async (req, res) => {
+  const event = req.body;
+
+  // ログでWebhookの中身確認
+  console.log('Webhook payload:', JSON.stringify(event, null, 2));
+
+  // ChatworkのWebhookがメッセージ作成イベントか確認
+  if (event.webhook_event === 'message_created') {
+    const message = event.body.message || '';
+    const fromAccountId = event.body.from_account.account_id;
+    const groupName = event.body.room.name;
+
+    if (message.trim() === '/test') {
+      const replyMessage =
+        `[info][title]テストメッセージ[/title]\n` +
+        `[piconname:${fromAccountId}]さんが、グループ${groupName}でテストを要求しました。[/info]`;
+
+      try {
         await axios.post(
-            url,
-            { body: message },
-            {
-                headers: {
-                    'X-ChatWorkToken': apiKey,
-                },
-            }
+          `https://api.chatwork.com/v2/rooms/${roomId}/messages`,
+          { body: replyMessage },
+          { headers: { 'X-ChatWorkToken': apiKey } }
         );
-        console.log('Message sent:', message);
-    } catch (error) {
-        console.error('Error sending message:', error.response ? error.response.data : error.message);
+        console.log('Test message sent');
+      } catch (e) {
+        console.error('Error sending test message:', e.response?.data || e.message);
+      }
     }
-}
+  }
 
-function getCurrentTimeMessage() {
-    const now = new Date();
-    const hours = now.getHours();
-    return `${hours}時です！`;
-}
+  res.status(200).send('OK');
+});
 
-function getDateChangeMessage() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-    return `日付変更！今日は${year}年${month}月${day}日です！`;
-}
-
-// スケジュール設定
-setInterval(() => {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-
-    if (minutes === 0 && hours % 2 === 0) {
-        sendMessage(getCurrentTimeMessage());
-    }
-
-    if (hours === 0 && minutes === 0) {
-        sendMessage(getDateChangeMessage());
-    }
-}, 60 * 1000); // 毎分チェック
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
